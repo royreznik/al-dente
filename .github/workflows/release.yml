@@ -1,0 +1,23 @@
+name: Release
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - test_dent*
+      - dent*
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: tests
+        run: make test
+      - name: create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dent
+            static-dent
+

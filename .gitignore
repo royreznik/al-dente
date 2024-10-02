@@ -55,4 +55,5 @@ dkms.conf
 # Custom
 dent
 test_dent
+static-dent
 .idea/
