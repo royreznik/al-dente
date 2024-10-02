@@ -18,8 +18,6 @@ int main(int argc, char *argv[]) {
     printf("%s\n", startDir);
     listDirThreaded(startDir);
     pthread_exit(NULL);
-
     sem_destroy(&semaphore);
-
     return 0;
 }
