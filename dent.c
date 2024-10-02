@@ -37,7 +37,6 @@ void listDirThreaded(const char *path) {
 
         for (bpos = 0; bpos < nread;) {
             d = (struct linux_dirent64 *) (buf + bpos);
-
             if (strcmp(d->d_name, ".") != 0 && strcmp(d->d_name, "..") != 0) {
                 printf("%s/%s\n", path, d->d_name);
 
@@ -52,7 +51,6 @@ void listDirThreaded(const char *path) {
                     pthread_detach(tid);
                 }
             }
-
             bpos += d->d_reclen;
         }
     }
