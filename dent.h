@@ -1,31 +1,36 @@
 #ifndef DENT_H
 #define DENT_H
 
-#define _GNU_SOURCE
-#include <dirent.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <sys/stat.h>
-#include <sys/syscall.h>
-#include <string.h>
 #include <pthread.h>
-#include <semaphore.h>
 
-#define BUF_SIZE 16384
+// Maximum path length
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
-struct linux_dirent64 {
-    ino64_t        d_ino;
-    off64_t        d_off;
-    unsigned short d_reclen;
-    unsigned char  d_type;
-    char           d_name[];
-};
+// Work queue node structure
+typedef struct work_node {
+    char *path;
+    struct work_node *next;
+} work_node_t;
 
-extern sem_t semaphore;
+// Work queue structure
+typedef struct {
+    work_node_t *head;
+    work_node_t *tail;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    int tasks_in_progress; // Number of tasks being processed or pending
+} work_queue_t;
 
-void *listDir(void *arg);
-void listDirThreaded(const char *path);
+// Function declarations
+void queue_init(work_queue_t *queue);
+void queue_push(work_queue_t *queue, char *path);
+char *queue_pop(work_queue_t *queue);
+void task_done(work_queue_t *queue);
+void queue_destroy(work_queue_t *queue);
+
+void list_directory(const char *path, work_queue_t *queue);
+void *worker_function(void *arg);
 
 #endif // DENT_H

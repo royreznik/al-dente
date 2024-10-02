@@ -111,7 +111,7 @@ void test_permission_denied() {
     system("chmod 000 test_no_permission");
     char* output = execute_dent(" test_no_permission");
     assert(output != NULL);
-    assert(strstr(output, "open:") != NULL);
+    assert(strstr(output, "opendir: Permission denied") != NULL);
     free(output);
     system("chmod 755 test_no_permission");
     system("rm -r test_no_permission");
@@ -122,7 +122,7 @@ void test_non_existent_directory() {
     printf("Test 8: Non-existent Directory\n");
     char* output = execute_dent(" non_existent_directory");
     assert(output != NULL);
-    assert(strstr(output, "open:") != NULL);
+    assert(strstr(output, "opendir: No such file or directory") != NULL);
     free(output);
     printf("Test 8 Passed\n");
 }

@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -pthread
+CFLAGS = -Wall -pthread -pg
 
 OBJ = main.o dent.o
 
@@ -23,9 +23,6 @@ test_dent: test_dent.c dent
 .PHONY:test
 test: test_dent
 	./test_dent
-
-image:
-	docker build . --tag
 
 .PHONY: clean
 clean:
