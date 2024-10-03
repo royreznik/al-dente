@@ -20,6 +20,15 @@ dent.o: dent.c dent.h
 test_dent: test_dent.c dent
 	$(CC) -Wall -o test_dent test_dent.c
 
+benchmark_scenario.o: benchmark_scenario.c
+	$(CC) $(CFLAGS) -c benchmark_scenario.c
+
+benchmark_scenario: benchmark_scenario.o
+	$(CC) $(CFLAGS) -o benchmark_scenario benchmark_scenario.o
+
+benchmark: dent
+	hyperfine --warmup 3 'find benchmark_scenario/' 'fdfind . benchmark_scenario/' './dent benchmark_scenario/'
+
 .PHONY:test
 test: test_dent
 	./test_dent
