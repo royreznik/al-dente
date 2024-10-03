@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -pthread
+CFLAGS = -Wall -pthread -O2
 
 OBJ = main.o dent.o
 

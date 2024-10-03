@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stddef.h>
 
 // Buffer size for getdents64
 #define BUF_SIZE 4096
@@ -105,38 +106,66 @@ void queue_destroy(work_queue_t *queue) {
 
 // Function to list the contents of a directory using getdents64
 void list_directory(const char *path, work_queue_t *queue) {
-    int fd = open(path, O_RDONLY | O_DIRECTORY);
+    int fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
     if (fd == -1) {
         perror("open");
         return;
     }
 
-    char buf[BUF_SIZE];
+    // Allocate a large buffer on the heap to avoid stack overflow
+    char *buf = malloc(BUF_SIZE);
+    if (!buf) {
+        perror("malloc");
+        close(fd);
+        return;
+    }
+
     ssize_t nread;
 
     while ((nread = syscall(SYS_getdents64, fd, buf, BUF_SIZE)) > 0) {
-        int bpos = 0;
+        // Use pointer arithmetic instead of indexing for efficiency
+        char *ptr = buf;
+        char *end = buf + nread;
 
-        while (bpos < nread) {
-            struct linux_dirent64 *d = (struct linux_dirent64 *)(buf + bpos);
-            bpos += d->d_reclen;
+        while (ptr < end) {
+            struct linux_dirent64 *d = (struct linux_dirent64 *)ptr;
+            ptr += d->d_reclen;
 
-            // Skip "." and ".."
-            if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0)
+            // Skip "." and ".." entries
+            if (d->d_name[0] == '.') {
+                if (d->d_name[1] == '\0' ||
+                    (d->d_name[1] == '.' && d->d_name[2] == '\0')) {
+                    continue;
+                }
+            }
+
+            // Precompute lengths to avoid multiple strlen calls
+            size_t path_len = strlen(path);
+            size_t name_len = d->d_reclen - offsetof(struct linux_dirent64, d_name) - 1;
+            // Ensure name is null-terminated
+            d->d_name[name_len] = '\0';
+
+            // Allocate memory for new_path with minimal overhead
+            char *new_path = malloc(path_len + 1 + name_len + 1);  // path + '/' + name + '\0'
+            if (!new_path) {
+                perror("malloc");
                 continue;
+            }
 
-            char new_path[PATH_MAX];
-            snprintf(new_path, sizeof(new_path), "%s/%s", path, d->d_name);
+            // Construct the new path
+            memcpy(new_path, path, path_len);
+            new_path[path_len] = '/';
+            memcpy(new_path + path_len + 1, d->d_name, name_len + 1);  // Include '\0'
+
+            // Output the path
             printf("%s\n", new_path);
 
+            // If it's a directory, push it onto the queue
             if (d->d_type == DT_DIR) {
-                // It's a directory
-                char *new_path_copy = strdup(new_path);
-                if (!new_path_copy) {
-                    perror("strdup");
-                    exit(EXIT_FAILURE);
-                }
-                queue_push(queue, new_path_copy);
+                queue_push(queue, new_path);  // Transfer ownership of new_path
+            } else {
+                // Free memory if not adding to the queue
+                free(new_path);
             }
             // Entries with unknown type are ignored to avoid stat
         }
@@ -146,6 +175,7 @@ void list_directory(const char *path, work_queue_t *queue) {
         perror("getdents64");
     }
 
+    free(buf);
     close(fd);
 }
 
