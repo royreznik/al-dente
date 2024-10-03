@@ -154,7 +154,7 @@ void test_circular_symbolic_links() {
 
 
 char* execute_dent(const char* args) {
-    char command[256];
+    char command[512];
     snprintf(command, sizeof(command), "./dent%s 2>&1", args);
 
     FILE* fp = popen(command, "r");
@@ -163,19 +163,20 @@ char* execute_dent(const char* args) {
         return NULL;
     }
 
-    size_t size = 0;
-    size_t capacity = 4096;
+    size_t capacity = 8192;
     char* output = malloc(capacity);
     if (!output) {
         perror("Malloc failed");
         pclose(fp);
         return NULL;
     }
+    output[0] = '\0';
 
-    size_t len;
-    while ((len = fread(output + size, 1, capacity - size - 1, fp)) > 0) {
-        size += len;
-        if (size >= capacity - 1) {
+    size_t size = 0;
+    char buffer[1024];
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        size_t len = strlen(buffer);
+        if (size + len + 1 > capacity) {
             capacity *= 2;
             char* temp = realloc(output, capacity);
             if (!temp) {
@@ -186,13 +187,14 @@ char* execute_dent(const char* args) {
             }
             output = temp;
         }
+        memcpy(output + size, buffer, len);
+        size += len;
+        output[size] = '\0';
     }
-    output[size] = '\0';
 
     int ret = pclose(fp);
-    if (ret != 0) {
-
-
+    if (ret == -1) {
+        perror("pclose failed");
     }
 
     return output;

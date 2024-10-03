@@ -18,6 +18,10 @@
 // Buffer size for getdents64
 #define BUF_SIZE 4096
 
+// Increase buffer sizes
+#define READ_BUF_SIZE  (256 * 1024)  // 256 KB buffer for reading directory entries
+#define WRITE_BUF_SIZE (256 * 1024)  // 256 KB buffer for output
+
 
 struct linux_dirent64 {
   ino64_t d_ino;
@@ -106,32 +110,32 @@ void queue_destroy(work_queue_t *queue) {
 
 // Function to list the contents of a directory using getdents64
 void list_directory(const char *path, work_queue_t *queue) {
-    int fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    // Thread-local buffers to avoid malloc/free and improve cache locality
+    static __thread char read_buf[READ_BUF_SIZE];
+    static __thread char write_buf[WRITE_BUF_SIZE];
+    static __thread size_t write_buf_pos = 0;
+    static __thread char new_path[PATH_MAX];
+
+    int fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (fd == -1) {
         perror("open");
         return;
     }
 
-    // Allocate a large buffer on the heap to avoid stack overflow
-    char *buf = malloc(BUF_SIZE);
-    if (!buf) {
-        perror("malloc");
-        close(fd);
-        return;
-    }
-
     ssize_t nread;
 
-    while ((nread = syscall(SYS_getdents64, fd, buf, BUF_SIZE)) > 0) {
-        // Use pointer arithmetic instead of indexing for efficiency
-        char *ptr = buf;
-        char *end = buf + nread;
+    while ((nread = syscall(SYS_getdents64, fd, read_buf, READ_BUF_SIZE)) > 0) {
+        char *ptr = read_buf;
+        char *end = read_buf + nread;
 
         while (ptr < end) {
             struct linux_dirent64 *d = (struct linux_dirent64 *)ptr;
             ptr += d->d_reclen;
 
-            // Skip "." and ".." entries
+            // Prefetch next entry to improve cache performance
+            __builtin_prefetch(ptr, 0, 1);
+
+            // Skip "." and ".."
             if (d->d_name[0] == '.') {
                 if (d->d_name[1] == '\0' ||
                     (d->d_name[1] == '.' && d->d_name[2] == '\0')) {
@@ -139,35 +143,45 @@ void list_directory(const char *path, work_queue_t *queue) {
                 }
             }
 
-            // Precompute lengths to avoid multiple strlen calls
+            // Calculate lengths without strlen
             size_t path_len = strlen(path);
             size_t name_len = d->d_reclen - offsetof(struct linux_dirent64, d_name) - 1;
+
             // Ensure name is null-terminated
             d->d_name[name_len] = '\0';
 
-            // Allocate memory for new_path with minimal overhead
-            char *new_path = malloc(path_len + 1 + name_len + 1);  // path + '/' + name + '\0'
-            if (!new_path) {
-                perror("malloc");
+            // Check for path length overflow
+            if (path_len + 1 + name_len >= PATH_MAX) {
+                // Path too long; skip this entry
                 continue;
             }
 
-            // Construct the new path
+            // Construct new_path using thread-local buffer
             memcpy(new_path, path, path_len);
             new_path[path_len] = '/';
-            memcpy(new_path + path_len + 1, d->d_name, name_len + 1);  // Include '\0'
+            memcpy(new_path + path_len + 1, d->d_name, name_len + 1);  // Copy null terminator
 
-            // Output the path
-            printf("%s\n", new_path);
-
-            // If it's a directory, push it onto the queue
-            if (d->d_type == DT_DIR) {
-                queue_push(queue, new_path);  // Transfer ownership of new_path
-            } else {
-                // Free memory if not adding to the queue
-                free(new_path);
+            // Accumulate output in write buffer
+            size_t new_path_len = path_len + 1 + name_len;
+            if (write_buf_pos + new_path_len + 1 > WRITE_BUF_SIZE) {
+                // Flush the buffer
+                fwrite(write_buf, 1, write_buf_pos, stdout);
+                write_buf_pos = 0;
             }
-            // Entries with unknown type are ignored to avoid stat
+            memcpy(write_buf + write_buf_pos, new_path, new_path_len);
+            write_buf_pos += new_path_len;
+            write_buf[write_buf_pos++] = '\n';
+
+            if (d->d_type == DT_DIR) {
+                // It's a directory; push it onto the queue
+                char *path_copy = strdup(new_path);
+                if (!path_copy) {
+                    perror("strdup");
+                    continue;
+                }
+                queue_push(queue, path_copy);
+            }
+            // Skip entries with unknown type to avoid stat
         }
     }
 
@@ -175,7 +189,12 @@ void list_directory(const char *path, work_queue_t *queue) {
         perror("getdents64");
     }
 
-    free(buf);
+    // Flush any remaining output
+    if (write_buf_pos > 0) {
+        fwrite(write_buf, 1, write_buf_pos, stdout);
+        write_buf_pos = 0;
+    }
+
     close(fd);
 }
 

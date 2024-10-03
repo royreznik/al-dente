@@ -4,7 +4,7 @@
 
 # Al-Dente - An extremely fast directory listing 
 
-Faster then most of the other cli tools like `fd` or `find` by more than triple!
+Faster than most of the other cli tools like `fd` or `find` by more than triple!
 
 Have you ever had a really large file system and tried to list all the files in it? So now you can do it quickly!
 
@@ -29,44 +29,44 @@ Let's create a `benchmark_scenario` folder that contains 765200 file entries (in
 
 Let's test the listing itself:
 ```shell
-hyperfine --warmup 3 'find benchmark_scenario/' 'fdfind . benchmark_scenario/' './dent benchmark_scenario/'
+hyperfine --warmup 3 'find benchmark_scenario/' 'fdfind -HI . benchmark_scenario/' 'dent benchmark_scenario/'
 Benchmark 1: find benchmark_scenario/
-  Time (mean ± σ):      3.203 s ±  0.056 s    [User: 0.727 s, System: 2.403 s]
-  Range (min … max):    3.132 s …  3.284 s    10 runs
+  Time (mean ± σ):      3.178 s ±  0.037 s    [User: 0.727 s, System: 2.435 s]
+  Range (min … max):    3.093 s …  3.229 s    10 runs
  
-Benchmark 2: fdfind . benchmark_scenario/
-  Time (mean ± σ):      2.943 s ±  0.072 s    [User: 0.449 s, System: 9.918 s]
-  Range (min … max):    2.805 s …  3.056 s    10 runs
+Benchmark 2: fdfind -HI . benchmark_scenario/
+  Time (mean ± σ):      1.633 s ±  0.034 s    [User: 0.264 s, System: 5.336 s]
+  Range (min … max):    1.581 s …  1.686 s    10 runs
  
-Benchmark 3: ./dent benchmark_scenario/
-  Time (mean ± σ):     797.3 ms ±  19.0 ms    [User: 595.3 ms, System: 2293.2 ms]
-  Range (min … max):   774.1 ms … 838.9 ms    10 runs
+Benchmark 3: dent benchmark_scenario/
+  Time (mean ± σ):     563.9 ms ±  14.8 ms    [User: 226.4 ms, System: 1815.4 ms]
+  Range (min … max):   550.7 ms … 597.7 ms    10 runs
  
 Summary
-  './dent benchmark_scenario/' ran
-    3.69 ± 0.13 times faster than 'fdfind . benchmark_scenario/'
-    4.02 ± 0.12 times faster than 'find benchmark_scenario/'
+  'dent benchmark_scenario/' ran
+    2.90 ± 0.10 times faster than 'fdfind -HI . benchmark_scenario/'
+    5.64 ± 0.16 times faster than 'find benchmark_scenario/'
 ```
 
 Now combined with grep you can achieve regex searching faster!
 ```shell
-hyperfine --warmup 3 'find benchmark_scenario/ -iregex .*file_25.txt' 'fdfind -u .*file_25.txt benchmark_scenario/' './dent benchmark_scenario/ | grep -P .*file_25.txt'
+hyperfine --warmup 3 'find benchmark_scenario/ -iregex .*file_25.txt' 'fdfind -HI -u .*file_25.txt benchmark_scenario/' 'dent benchmark_scenario/ | grep -aP .*file_25.txt'
 Benchmark 1: find benchmark_scenario/ -iregex .*file_25.txt
-  Time (mean ± σ):      4.379 s ±  0.050 s    [User: 1.742 s, System: 2.554 s]
-  Range (min … max):    4.259 s …  4.442 s    10 runs
+  Time (mean ± σ):      4.231 s ±  0.080 s    [User: 1.732 s, System: 2.500 s]
+  Range (min … max):    4.129 s …  4.399 s    10 runs
  
-Benchmark 2: fdfind -u .*file_25.txt benchmark_scenario/
-  Time (mean ± σ):      1.244 s ±  0.040 s    [User: 0.167 s, System: 4.007 s]
-  Range (min … max):    1.202 s …  1.327 s    10 runs
+Benchmark 2: fdfind -HI -u .*file_25.txt benchmark_scenario/
+  Time (mean ± σ):      1.127 s ±  0.030 s    [User: 0.197 s, System: 3.751 s]
+  Range (min … max):    1.104 s …  1.207 s    10 runs
  
-Benchmark 3: ./dent benchmark_scenario/ | grep -P .*file_25.txt
-  Time (mean ± σ):      1.001 s ±  0.057 s    [User: 0.453 s, System: 2.609 s]
-  Range (min … max):    0.955 s …  1.153 s    10 runs
+Benchmark 3: dent benchmark_scenario/ | grep -aP .*file_25.txt
+  Time (mean ± σ):     703.9 ms ±  32.5 ms    [User: 197.8 ms, System: 1895.0 ms]
+  Range (min … max):   657.1 ms … 768.2 ms    10 runs
  
 Summary
-  './dent benchmark_scenario/ | grep -P .*file_25.txt' ran
-    1.24 ± 0.08 times faster than 'fdfind -u .*file_25.txt benchmark_scenario/'
-    4.38 ± 0.25 times faster than 'find benchmark_scenario/ -iregex .*file_25.txt'
+  'dent benchmark_scenario/ | grep -aP .*file_25.txt' ran
+    1.60 ± 0.09 times faster than 'fdfind -HI -u .*file_25.txt benchmark_scenario/'
+    6.01 ± 0.30 times faster than 'find benchmark_scenario/ -iregex .*file_25.txt'
 ```
 
 ## Compilation

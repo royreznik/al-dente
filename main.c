@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    printf("%s", start_dir);
+    printf("%s\n", start_dir);
 
     // Initialize the work queue
     work_queue_t work_queue;
