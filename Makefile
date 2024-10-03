@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -pthread -pg
+CFLAGS = -Wall -pthread
 
 OBJ = main.o dent.o
 
@@ -26,8 +26,8 @@ benchmark_scenario.o: benchmark_scenario.c
 benchmark_scenario: benchmark_scenario.o
 	$(CC) $(CFLAGS) -o benchmark_scenario benchmark_scenario.o
 
-benchmark: dent
-	hyperfine --warmup 3 'find benchmark_scenario/' 'fdfind . benchmark_scenario/' './dent benchmark_scenario/'
+dent.so: $(OBJ)
+	$(CC) $(CFLAGS) -fPIC -shared -o dent.so dent.c main.c
 
 .PHONY:test
 test: test_dent
@@ -35,4 +35,4 @@ test: test_dent
 
 .PHONY: clean
 clean:
-	rm -f $(OBJ) static-dent dent test_dent
+	rm -f $(OBJ) static-dent dent test_dent dent.so

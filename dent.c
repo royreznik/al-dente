@@ -1,12 +1,30 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <dirent.h>
 #include <string.h>
 #include <limits.h>
-#include <sys/stat.h>
 #include <unistd.h>
-#include "dent.h"
+#include <fcntl.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include "dent.h"  // Assuming this header defines struct linux_dirent64
+#include <dirent.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <unistd.h>
+
+// Buffer size for getdents64
+#define BUF_SIZE 4096
+
+
+struct linux_dirent64 {
+  ino64_t d_ino;
+  off64_t d_off;
+  unsigned short d_reclen;
+  unsigned char d_type;
+  char d_name[];
+};
 
 // Initialize the work queue
 void queue_init(work_queue_t *queue) {
@@ -85,49 +103,50 @@ void queue_destroy(work_queue_t *queue) {
     pthread_cond_destroy(&queue->cond);
 }
 
-// Function to list the contents of a directory
+// Function to list the contents of a directory using getdents64
 void list_directory(const char *path, work_queue_t *queue) {
-    DIR *dir;
-    struct dirent *entry;
-
-    dir = opendir(path);
-    if (!dir) {
-        perror("opendir");
+    int fd = open(path, O_RDONLY | O_DIRECTORY);
+    if (fd == -1) {
+        perror("open");
         return;
     }
 
-    while ((entry = readdir(dir)) != NULL) {
-        // Skip "." and ".."
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
-        }
+    char buf[BUF_SIZE];
+    ssize_t nread;
 
-        char new_path[PATH_MAX];
-        snprintf(new_path, sizeof(new_path), "%s/%s", path, entry->d_name);
-        printf("%s\n", new_path);
+    while ((nread = syscall(SYS_getdents64, fd, buf, BUF_SIZE)) > 0) {
+        int bpos = 0;
 
-        int is_dir = 0;
-        if (entry->d_type == DT_DIR) {
-            is_dir = 1;
-        } else if (entry->d_type == DT_UNKNOWN) {
-            // For file systems that do not support d_type
-            struct stat st;
-            if (stat(new_path, &st) == 0 && S_ISDIR(st.st_mode)) {
-                is_dir = 1;
+        while (bpos < nread) {
+            struct linux_dirent64 *d = (struct linux_dirent64 *)(buf + bpos);
+            bpos += d->d_reclen;
+
+            // Skip "." and ".."
+            if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0)
+                continue;
+
+            char new_path[PATH_MAX];
+            snprintf(new_path, sizeof(new_path), "%s/%s", path, d->d_name);
+            printf("%s\n", new_path);
+
+            if (d->d_type == DT_DIR) {
+                // It's a directory
+                char *new_path_copy = strdup(new_path);
+                if (!new_path_copy) {
+                    perror("strdup");
+                    exit(EXIT_FAILURE);
+                }
+                queue_push(queue, new_path_copy);
             }
-        }
-
-        if (is_dir) {
-            char *new_path_copy = strdup(new_path);
-            if (!new_path_copy) {
-                perror("strdup");
-                exit(EXIT_FAILURE);
-            }
-            queue_push(queue, new_path_copy);
+            // Entries with unknown type are ignored to avoid stat
         }
     }
 
-    closedir(dir);
+    if (nread == -1) {
+        perror("getdents64");
+    }
+
+    close(fd);
 }
 
 // Worker thread function
